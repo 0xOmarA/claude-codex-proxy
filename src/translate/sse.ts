@@ -7,6 +7,8 @@ export function encodeSseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
+const BOUNDARY = /\r\n\r\n|\n\n|\r\r/
+
 export async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncGenerator<SseEvent> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
@@ -16,10 +18,10 @@ export async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncGe
       const { value, done } = await reader.read()
       if (done) break
       buf += decoder.decode(value, { stream: true })
-      let idx: number
-      while ((idx = buf.indexOf("\n\n")) !== -1) {
-        const raw = buf.slice(0, idx)
-        buf = buf.slice(idx + 2)
+      let match: RegExpExecArray | null
+      while ((match = BOUNDARY.exec(buf)) !== null) {
+        const raw = buf.slice(0, match.index)
+        buf = buf.slice(match.index + match[0].length)
         const evt = parseEventBlock(raw)
         if (evt) yield evt
       }
@@ -36,7 +38,8 @@ export async function* parseSseStream(body: ReadableStream<Uint8Array>): AsyncGe
 function parseEventBlock(raw: string): SseEvent | undefined {
   let event: string | undefined
   const dataLines: string[] = []
-  for (const line of raw.split("\n")) {
+  // Per SSE spec, lines are terminated by CR, LF, or CRLF.
+  for (const line of raw.split(/\r\n|\n|\r/)) {
     if (!line || line.startsWith(":")) continue
     const colon = line.indexOf(":")
     const field = colon === -1 ? line : line.slice(0, colon)

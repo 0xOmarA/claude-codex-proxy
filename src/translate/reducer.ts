@@ -1,4 +1,8 @@
 import { parseSseStream } from "./sse.ts"
+import { createLogger } from "../log.ts"
+
+const log = createLogger("translate.reducer")
+const VERBOSE = !!process.env.CCP_LOG_VERBOSE
 
 export class UpstreamStreamError extends Error {
   constructor(
@@ -32,6 +36,7 @@ export type ReducerEvent =
 interface TextState {
   kind: "text"
   index: number
+  textAccum: string
 }
 interface ToolState {
   kind: "tool"
@@ -72,6 +77,8 @@ export async function* reduceUpstream(
     }
     const t: string = p.type || evt.event || ""
 
+    if (VERBOSE) log.debug("upstream event", { type: t, output_index: p.output_index, item_id: p.item_id })
+
     if (t === "codex.rate_limits") {
       if (p.rate_limits?.limit_reached) {
         throw new UpstreamStreamError(
@@ -94,7 +101,7 @@ export async function* reduceUpstream(
       if (item.type === "reasoning") continue
       if (item.type === "message") {
         const idx = anthropicIndex++
-        blocksByOutputIndex.set(outputIndex, { kind: "text", index: idx })
+        blocksByOutputIndex.set(outputIndex, { kind: "text", index: idx, textAccum: "" })
         if (item.id) itemIdToOutputIndex.set(item.id, outputIndex)
         yield { kind: "text-start", index: idx }
         continue
@@ -128,6 +135,7 @@ export async function* reduceUpstream(
       if (!state || state.kind !== "text") continue
       const delta: string = p.delta ?? ""
       if (!delta) continue
+      state.textAccum += delta
       yield { kind: "text-delta", index: state.index, text: delta }
       continue
     }
@@ -170,11 +178,22 @@ export async function* reduceUpstream(
             ? item.arguments
             : state.argsAccum) || ""
         if (finalArgs.length) {
+          state.argsAccum = finalArgs
           yield { kind: "tool-delta", index: state.index, partialJson: finalArgs }
         }
       }
-      if (state.kind === "text") yield { kind: "text-stop", index: state.index }
-      else yield { kind: "tool-stop", index: state.index }
+      if (state.kind === "text") {
+        log.debug("text block complete", { index: state.index, text: state.textAccum })
+        yield { kind: "text-stop", index: state.index }
+      } else {
+        log.debug("tool block complete", {
+          index: state.index,
+          callId: state.callId,
+          name: state.name,
+          args: state.argsAccum,
+        })
+        yield { kind: "tool-stop", index: state.index }
+      }
       blocksByOutputIndex.delete(p.output_index)
       continue
     }

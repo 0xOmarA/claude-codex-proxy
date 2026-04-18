@@ -63,11 +63,13 @@ async function maybeRotate(): Promise<void> {
   return rotating
 }
 
+const VERBOSE = !!process.env.CCP_LOG_VERBOSE
+
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 6) return "[depth-limit]"
   if (value == null) return value
   if (typeof value === "string") {
-    if (value.length > 4000) return value.slice(0, 4000) + `…[${value.length - 4000} more]`
+    if (!VERBOSE && value.length > 4000) return value.slice(0, 4000) + `…[${value.length - 4000} more]`
     return value
   }
   if (typeof value !== "object") return value

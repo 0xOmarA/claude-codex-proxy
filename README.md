@@ -286,11 +286,12 @@ The proxy speaks enough of the Anthropic API for Claude Code:
 
 Settings are environment variables on the proxy process, not a config file.
 
-| Variable          | Default          | Purpose                         |
-| ----------------- | ---------------- | ------------------------------- |
-| `PORT`            | `18765`          | Proxy listen port               |
-| `XDG_STATE_HOME`  | `~/.local/state` | Base dir for `proxy.log`        |
-| `CCP_LOG_STDERR` | unset            | Also mirror log lines to stderr |
+| Variable           | Default          | Purpose                                             |
+| ------------------ | ---------------- | --------------------------------------------------- |
+| `PORT`             | `18765`          | Proxy listen port                                   |
+| `XDG_STATE_HOME`   | `~/.local/state` | Base dir for `proxy.log`                            |
+| `CCP_LOG_STDERR`   | unset            | Also mirror log lines to stderr                     |
+| `CCP_LOG_VERBOSE`  | unset            | Log full request/response bodies + every SSE event  |
 
 ### Files
 

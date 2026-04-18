@@ -8,6 +8,7 @@ import { CodexError, postCodex } from "./codex/client.ts"
 import { countTokens } from "./count-tokens.ts"
 
 const log = createLogger("server")
+const VERBOSE = !!process.env.CCP_LOG_VERBOSE
 
 export interface ServeOptions {
   port: number
@@ -83,6 +84,7 @@ async function handleMessages(req: Request, reqId: string): Promise<Response> {
     sessionId,
     hasJsonSchemaFormat: body.output_config?.format?.type === "json_schema",
   })
+  if (VERBOSE) log.debug("anthropic request body", { reqId, body })
 
   try {
     assertAllowedModel(body.model)
@@ -105,6 +107,7 @@ async function handleMessages(req: Request, reqId: string): Promise<Response> {
     hasInstructions: !!translated.instructions,
     promptCacheKey: translated.prompt_cache_key,
   })
+  if (VERBOSE) log.debug("translated request body", { reqId, body: translated })
 
   let upstream
   try {

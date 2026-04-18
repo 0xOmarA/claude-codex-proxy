@@ -36,14 +36,14 @@ async function main() {
       if (sub === "login") {
         const tokens = await runBrowserLogin()
         const saved = await persistInitialTokens(tokens)
-        console.log(`Auth saved to ${authPath()}`)
+        console.log(`Auth saved in ${authPath()}`)
         if (saved.accountId) console.log(`Account: ${saved.accountId}`)
         process.exit(0)
       }
       if (sub === "device") {
         const tokens = await runDeviceLogin()
         const saved = await persistInitialTokens(tokens)
-        console.log(`Auth saved to ${authPath()}`)
+        console.log(`Auth saved in ${authPath()}`)
         if (saved.accountId) console.log(`Account: ${saved.accountId}`)
         process.exit(0)
       }
@@ -56,7 +56,7 @@ async function main() {
         const ms = auth.expires - Date.now()
         console.log(`Account: ${auth.accountId ?? "(none)"}`)
         console.log(`Expires: ${new Date(auth.expires).toISOString()} (in ${Math.floor(ms / 1000)}s)`)
-        console.log(`File:    ${authPath()}`)
+        console.log(`Storage: ${authPath()}`)
         return
       }
       if (sub === "logout") {

@@ -1,7 +1,3 @@
-import { mkdir, readFile, writeFile, chmod, unlink, rename } from "node:fs/promises"
-import { dirname, join } from "node:path"
-import { homedir } from "node:os"
-
 export interface StoredAuth {
   access: string
   refresh: string
@@ -9,39 +5,116 @@ export interface StoredAuth {
   accountId?: string
 }
 
-const DIR = join(homedir(), ".config", "claude-codex-proxy")
-const FILE = join(DIR, "auth.json")
+const KEYCHAIN_SERVICE = "claude-codex-proxy"
+const KEYCHAIN_ACCOUNT = "auth"
+const SECRET_TOOL_LABEL = "claude-codex-proxy auth"
+const SECRET_TOOL_ATTRIBUTES = ["service", KEYCHAIN_SERVICE, "account", KEYCHAIN_ACCOUNT] as const
 
 export async function loadAuth(): Promise<StoredAuth | undefined> {
-  try {
-    const raw = await readFile(FILE, "utf8")
-    return JSON.parse(raw) as StoredAuth
-  } catch (err: any) {
-    if (err?.code === "ENOENT") return undefined
-    throw err
-  }
+  const raw = await loadStoredValue()
+  if (!raw) return undefined
+  return JSON.parse(raw) as StoredAuth
 }
 
 export async function saveAuth(auth: StoredAuth): Promise<void> {
-  await mkdir(dirname(FILE), { recursive: true })
-  const tmp = `${FILE}.${process.pid}.${Date.now()}.tmp`
-  await writeFile(tmp, JSON.stringify(auth, null, 2), { encoding: "utf8", mode: 0o600 })
-  try {
-    await chmod(tmp, 0o600)
-  } catch {
-    // best-effort; mode in writeFile options usually suffices
-  }
-  await rename(tmp, FILE)
+  await saveStoredValue(JSON.stringify(auth))
 }
 
 export async function clearAuth(): Promise<void> {
-  try {
-    await unlink(FILE)
-  } catch (err: any) {
-    if (err?.code !== "ENOENT") throw err
-  }
+  await clearStoredValue()
 }
 
 export function authPath(): string {
-  return FILE
+  if (process.platform === "darwin") return "macOS Keychain"
+  if (process.platform === "linux") return "Linux Secret Service"
+  return "unsupported auth storage"
+}
+
+async function loadStoredValue(): Promise<string | undefined> {
+  if (process.platform === "darwin") {
+    return readKeychain().catch((err: Error & { code?: number }) => {
+      if (err.code === 44) return undefined
+      throw err
+    })
+  }
+  if (process.platform === "linux") {
+    return readSecret().catch((err: Error & { code?: number }) => {
+      if (err.code === 1) return undefined
+      throw err
+    })
+  }
+  throw new Error("Auth storage is only supported on macOS and Linux")
+}
+
+async function saveStoredValue(value: string): Promise<void> {
+  if (process.platform === "darwin") {
+    await runCommand("security", [
+      "add-generic-password",
+      "-U",
+      "-a",
+      KEYCHAIN_ACCOUNT,
+      "-s",
+      KEYCHAIN_SERVICE,
+      "-w",
+      value,
+    ])
+    return
+  }
+  if (process.platform === "linux") {
+    await runCommand("secret-tool", ["store", "--label", SECRET_TOOL_LABEL, ...SECRET_TOOL_ATTRIBUTES], value)
+    return
+  }
+  throw new Error("Auth storage is only supported on macOS and Linux")
+}
+
+async function clearStoredValue(): Promise<void> {
+  if (process.platform === "darwin") {
+    await runCommand("security", ["delete-generic-password", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE]).catch(
+      (err: Error & { code?: number }) => {
+        if (err.code !== 44) throw err
+      },
+    )
+    return
+  }
+  if (process.platform === "linux") {
+    await runCommand("secret-tool", ["clear", ...SECRET_TOOL_ATTRIBUTES]).catch((err: Error & { code?: number }) => {
+      if (err.code !== 1) throw err
+    })
+    return
+  }
+  throw new Error("Auth storage is only supported on macOS and Linux")
+}
+
+async function readKeychain(): Promise<string> {
+  const { stdout } = await runCommand("security", ["find-generic-password", "-w", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE])
+  return stdout.trim()
+}
+
+async function readSecret(): Promise<string> {
+  const { stdout } = await runCommand("secret-tool", ["lookup", ...SECRET_TOOL_ATTRIBUTES])
+  return stdout.trim()
+}
+
+async function runCommand(command: string, args: string[], stdin?: string): Promise<{ stdout: string; stderr: string }> {
+  const proc = Bun.spawn([command, ...args], {
+    stdin: stdin === undefined ? "ignore" : "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (stdin !== undefined && proc.stdin) {
+    proc.stdin.write(stdin)
+    proc.stdin.end()
+  }
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (exitCode !== 0) {
+    const message = stderr.trim() || stdout.trim() || `${command} exited with ${exitCode}`
+    const err = new Error(message) as Error & { code?: number }
+    err.code = exitCode
+    throw err
+  }
+  return { stdout, stderr }
 }

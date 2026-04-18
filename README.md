@@ -48,6 +48,22 @@ bun install
 bun src/cli.ts --version
 ```
 
+**Dev install globally** — link the working tree so `claude-codex-proxy`
+is on your `PATH` and picks up local edits live:
+
+```sh
+bun link                       # inside the repo (registers the package)
+bun link claude-codex-proxy    # anywhere (creates the symlink)
+```
+
+Make sure `$(bun pm bin -g)` is in your `PATH`. Unlink with
+`bun unlink claude-codex-proxy`. Alternatively, compile a one-off
+binary:
+
+```sh
+bun build ./src/cli.ts --compile --outfile ~/.local/bin/claude-codex-proxy
+```
+
 ### 2. Authenticate with ChatGPT
 
 Open a browser (PKCE flow):

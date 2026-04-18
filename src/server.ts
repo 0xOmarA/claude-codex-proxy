@@ -16,6 +16,7 @@ export interface ServeOptions {
 
 export function startServer(opts: ServeOptions): { stop: () => void; port: number } {
   const server = Bun.serve({
+    hostname: "127.0.0.1",
     port: opts.port,
     async fetch(req) {
       const url = new URL(req.url)

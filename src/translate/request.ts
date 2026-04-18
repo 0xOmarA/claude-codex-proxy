@@ -12,7 +12,11 @@ export interface ResponsesRequest {
   instructions?: string
   input: ResponsesInputItem[]
   tools?: ResponsesTool[]
-  tool_choice?: "auto" | "none" | "required"
+  tool_choice?:
+    | "auto"
+    | "none"
+    | "required"
+    | { type: "function"; name: string }
   parallel_tool_calls?: boolean
   store: false
   stream: true
@@ -99,7 +103,7 @@ export function translateRequest(req: AnthropicRequest, opts: TranslateOptions =
 
 function mapToolChoice(
   choice: AnthropicRequest["tool_choice"],
-): "auto" | "none" | "required" | undefined {
+): ResponsesRequest["tool_choice"] {
   if (!choice) return "auto"
   switch (choice.type) {
     case "auto":
@@ -107,8 +111,9 @@ function mapToolChoice(
     case "none":
       return "none"
     case "any":
-    case "tool":
       return "required"
+    case "tool":
+      return choice.name ? { type: "function", name: choice.name } : "required"
   }
 }
 

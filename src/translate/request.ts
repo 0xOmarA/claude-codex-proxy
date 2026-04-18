@@ -148,14 +148,19 @@ function buildInput(messages: AnthropicMessage[]): ResponsesInputItem[] {
       }
       if (parts.length) out.push({ type: "message", role: "user", content: parts })
     } else {
-      // assistant
+      // assistant: preserve interleaved order of text vs tool_use
       const textParts: ResponsesContentPart[] = []
-      const toolCalls: ResponsesInputItem[] = []
+      const flushText = () => {
+        if (textParts.length) {
+          out.push({ type: "message", role: "assistant", content: textParts.splice(0) })
+        }
+      }
       for (const block of blocks) {
         if (block.type === "text") {
           textParts.push({ type: "output_text", text: block.text })
         } else if (block.type === "tool_use") {
-          toolCalls.push({
+          flushText()
+          out.push({
             type: "function_call",
             call_id: block.id,
             name: block.name,
@@ -163,10 +168,7 @@ function buildInput(messages: AnthropicMessage[]): ResponsesInputItem[] {
           })
         }
       }
-      if (textParts.length) {
-        out.push({ type: "message", role: "assistant", content: textParts })
-      }
-      for (const tc of toolCalls) out.push(tc)
+      flushText()
     }
   }
   return out

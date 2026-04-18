@@ -63,9 +63,8 @@ claude-codex-proxy auth device
 ```
 
 Either command prints a URL. Sign in with your **ChatGPT Plus/Pro account**. On
-macOS, access and refresh tokens are stored in Keychain. On other platforms,
-they are stored at `~/.config/claude-codex-proxy/auth.json` with 0600
-permissions.
+macOS, credentials are stored in Keychain. On other platforms, they are stored
+locally for reuse by the proxy.
 
 Verify it stuck:
 
@@ -123,7 +122,7 @@ sequenceDiagram
     participant AUTH as auth.openai.com
     participant CGX as chatgpt.com/<br/>backend-api/codex
 
-    Note over P,AUTH: One-time: PKCE or device OAuth<br/>tokens cached in Keychain on macOS<br/>or at ~/.config/claude-codex-proxy/auth.json elsewhere
+    Note over P,AUTH: One-time: PKCE or device OAuth<br/>tokens cached locally for reuse
 
     CC->>P: POST /v1/messages (Anthropic shape, stream: true)
 
@@ -194,8 +193,8 @@ stored a token.
 Runs the PKCE browser flow against `auth.openai.com` using the Codex CLI's
 client ID. Prints a URL, opens a local callback listener on port 1455, waits for
 the browser to redirect back, and stores the resulting access / refresh tokens
-in Keychain on macOS or at `~/.config/claude-codex-proxy/auth.json` (mode 0600)
-on other platforms. The process exits automatically once the tokens are saved.
+in Keychain on macOS or locally on other platforms. The process exits
+automatically once the tokens are saved.
 
 ```sh
 claude-codex-proxy auth login
@@ -238,8 +237,6 @@ Expires: 2026-04-28T16:46:04.827Z (in 863946s)
 Storage: macOS Keychain
 ```
 
-On non-macOS platforms, the storage line shows the auth file path instead.
-
 The proxy refreshes the access token 5 minutes before expiry with a
 single-flight guard, so concurrent requests never trigger stampedes of refresh
 calls.
@@ -248,9 +245,8 @@ calls.
 
 ### `auth logout`
 
-Removes stored auth credentials. On macOS this deletes the Keychain entry; on
-other platforms it removes `~/.config/claude-codex-proxy/auth.json`. No server
-call is needed; the refresh token just becomes dead.
+Removes stored auth credentials. On macOS this deletes the Keychain entry. No
+server call is needed; the refresh token just becomes dead.
 
 ```sh
 claude-codex-proxy auth logout
@@ -283,10 +279,6 @@ Settings are environment variables on the proxy process, not a config file.
 
 ### Files
 
-- `~/.config/claude-codex-proxy/auth.json` — OAuth tokens on non-macOS platforms,
-  0600
-- macOS Keychain entry `claude-codex-proxy` / account `auth` — OAuth tokens on
-  macOS
 - `$XDG_STATE_HOME/claude-codex-proxy/proxy.log` — JSON-lines log, rotated at 20
   MiB. Secrets (`authorization`, `access`, `refresh`, `id_token`,
   `ChatGPT-Account-Id`, …) are redacted before write.
